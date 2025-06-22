@@ -210,7 +210,7 @@
 
   async function increment(index, name) {
     if (!editEnabled) return;
-    data[index][capitalizeName(name)]++;
+    data[index][capitalizeName(name)]+=5;
     renderTable();
     await saveData();
   }
@@ -218,7 +218,7 @@
   async function decrement(index, name) {
     if (!editEnabled) return;
     if (data[index][capitalizeName(name)] > 0) {
-      data[index][capitalizeName(name)]--;
+      data[index][capitalizeName(name)]-=5;
       renderTable();
       await saveData();
     }
