@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <title>Toth Boys Game time score</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+    h1 {
+      color: #2c3e50;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: white;
+      margin-top: 20px;
+      min-width: 600px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 10px;
+      text-align: center;
+    }
+    th {
+      background-color: #3498db;
+      color: white;
+    }
+    input[type="text"], input[type="password"] {
+      padding: 8px;
+      width: 250px;
+      margin: 5px 5px 10px 0;
+    }
+    button {
+      padding: 6px 10px;
+      background-color: #27ae60;
+      color: white;
+      border: none;
+      cursor: pointer;
+      margin: 5px 3px;
+    }
+    button:hover {
+      background-color: #219150;
+    }
+    .highlight {
+      background-color: #b6fcb6 !important;
+    }
+    .scroll-container {
+      overflow-x: auto;
+    }
+    canvas {
+      margin-top: 30px;
+      max-width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Toth Boys Game time score</h1>
+
+  <!-- Szerkesztés engedélyezése -->
+  <div>
+    <input type="password" id="editPassword" placeholder="Írd be a jelszót a szerkesztéshez">
+    <button onclick="unlockEdit()">Szerkesztés engedélyezése</button>
+  </div>
+
+  <!-- Kategória hozzáadás -->
+  <div>
+    <input type="text" id="newCategoryInput" placeholder="Új kategória pl: Kukamosás+15 perc">
+    <button onclick="addCategory()">Hozzáadás</button>
+    <button onclick="exportToCSV()">Exportálás Excelbe</button>
+  </div>
+
+  <!-- Pont nullázása -->
+  <div>
+    <input type="password" id="resetPassword" placeholder="Pontok törlése jelszóval">
+    <button onclick="resetScores()">Pontok törlése</button>
+  </div>
+
+  <!-- Táblázat -->
+  <div class="scroll-container">
+    <table id="scoreTable">
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Time</th>
+          <th>Abel</th>
+          <th>Aron</th>
+          <th>Lia</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Grafikon -->
+  <canvas id="scoreChart" width="400" height="200"></canvas>
+
+  <script>
+    const tableBody = document.getElementById('tableBody');
+    const storageKey = 'toth_boys_scores';
+    const editPass = 'admin123';
+    let editEnabled = false;
+
+    const defaultTasks = [
+      ["Fenyők alatti gereblyézés", "60 perc"],
+      ["Beágyazás", "10 perc"],
+      ["Lakás porszívózás", "10 perc"],
+      ["Segítség valakinek", "10 perc"],
+      ["Kutya etetés/itatás", "5 perc"],
+      ["Kutya ürülék szedés", "10 perc"],
+      ["Saját szoba porszívózás", "5 perc"],
+      ["Reggel este fogmosás", "10 perc"]
+    ];
+
+    let data = [];
+
+    function loadData() {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        data = JSON.parse(saved);
+      } else {
+        data = defaultTasks.map(([cat, time]) => ({ category: cat, time, abel: 0, aron: 0, lia: 0 }));
+      }
+      renderTable();
+    }
+
+    function saveData() {
+      localStorage.setItem(storageKey, JSON.stringify(data));
+    }
+
+    function renderTable() {
+      tableBody.innerHTML = '';
+
+      let total = { abel: 0, aron: 0, lia: 0 };
+      data.forEach(row => {
+        total.abel += row.abel;
+        total.aron += row.aron;
+        total.lia += row.lia;
+      });
+
+      const maxPoints = Math.max(total.abel, total.aron, total.lia);
+
+      data.forEach((row, index) => {
+        const tr = document.createElement('tr');
+
+        const createCell = (value, name) => {
+          const cell = document.createElement('td');
+          if (getTotal(name) === maxPoints && maxPoints > 0) {
+            cell.classList.add("highlight");
+          }
+
+          let controls = '';
+          if (editEnabled) {
+            controls = `
+              <button onclick="increment(${index}, '${name}')">+</button>
+              <button onclick="decrement(${index}, '${name}')">−</button>
+            `;
+          }
+
+          cell.innerHTML = `${value} ${controls}`;
+          return cell;
+        };
+
+        tr.appendChild(document.createElement('td')).textContent = row.category;
+        tr.appendChild(document.createElement('td')).textContent = row.time;
+        tr.appendChild(createCell(row.abel, 'abel'));
+        tr.appendChild(createCell(row.aron, 'aron'));
+        tr.appendChild(createCell(row.lia, 'lia'));
+
+        tableBody.appendChild(tr);
+      });
+
+      saveData();
+      drawChart();
+    }
+
+    function getTotal(name) {
+      return data.reduce((sum, row) => sum + row[name], 0);
+    }
+
+    function increment(index, name) {
+      if (!editEnabled) return;
+      data[index][name]++;
+      renderTable();
+    }
+
+    function decrement(index, name) {
+      if (!editEnabled) return;
+      if (data[index][name] > 0) {
+        data[index][name]--;
+        renderTable();
+      }
+    }
+
+    function addCategory() {
+      if (!editEnabled) {
+        alert("Először add meg a helyes jelszót!");
+        return;
+      }
+
+      const input = document.getElementById('newCategoryInput');
+      const value = input.value.trim();
+
+      if (!value.includes('+')) {
+        alert('Hibás formátum! Pl.: Mosogatás+15 perc');
+        return;
+      }
+
+      const [category, time] = value.split('+');
+      if (!category || !time) {
+        alert('Mindkét mező szükséges!');
+        return;
+      }
+
+      data.push({
+        category: category.trim(),
+        time: time.trim(),
+        abel: 0,
+        aron: 0,
+        lia: 0
+      });
+
+      input.value = '';
+      renderTable();
+    }
+
+    function exportToCSV() {
+      let csv = "Category,Time,Abel,Aron,Lia\n";
+      data.forEach(row => {
+        csv += `${row.category},${row.time},${row.abel},${row.aron},${row.lia}\n`;
+      });
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "toth_boys_score.csv";
+      link.click();
+    }
+
+    function resetScores() {
+      const pass = document.getElementById('resetPassword').value;
+      if (pass !== editPass) {
+        alert("Hibás jelszó!");
+        return;
+      }
+
+      if (!confirm("Biztosan törlöd az összes pontot?")) return;
+
+      data.forEach(row => {
+        row.abel = 0;
+        row.aron = 0;
+        row.lia = 0;
+      });
+      document.getElementById('resetPassword').value = '';
+      renderTable();
+    }
+
+    function unlockEdit() {
+      const pw = document.getElementById('editPassword').value;
+      if (pw === editPass) {
+        editEnabled = true;
+        alert("Szerkesztés engedélyezve.");
+        renderTable();
+      } else {
+        alert("Hibás jelszó.");
+      }
+    }
+
+    function drawChart() {
+      const canvas = document.getElementById('scoreChart');
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
+      ctx.clearRect(0, 0, width, height);
+
+      const totals = {
+        Abel: getTotal('abel'),
+        Aron: getTotal('aron'),
+        Lia: getTotal('lia')
+      };
+
+      const names = Object.keys(totals);
+      const max = Math.max(...Object.values(totals), 1);
+      const barWidth = 80;
+      const gap = 40;
+
+      names.forEach((name, i) => {
+        const x = 50 + i * (barWidth + gap);
+        const barHeight = (totals[name] / max) * (height - 50);
+        ctx.fillStyle = "#3498db";
+        ctx.fillRect(x, height - barHeight - 30, barWidth, barHeight);
+        ctx.fillStyle = "#000";
+        ctx.textAlign = "center";
+        ctx.fillText(name, x + barWidth / 2, height - 10);
+        ctx.fillText(totals[name], x + barWidth / 2, height - barHeight - 40);
+      });
+    }
+
+    loadData();
+  </script>
+
+</body>
+</html>
