@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <meta charset="UTF-8" />
   <title>Játékidő</title>
   <div id="infoBox"></div>
@@ -225,8 +226,9 @@
         let controls = '';
         if (editEnabled) {
           controls = `
-            <button onclick="increment(${index}, '${name}')">+</button>
-            <button onclick="decrement(${index}, '${name}')">−</button>
+            <button onclick="increment(${index}, '${name}')">➕</button>
+            <button onclick="decrement(${index}, '${name}')">➖</button>
+            <button onclick="saveData()">💾</button>
           `;
         }
         cell.innerHTML = `${value} ${controls}`;
@@ -248,7 +250,8 @@
       tableBody.appendChild(tr);
     });
 
-    drawChart();
+    //drawChart();
+    renderChart();
   }
 
   function getTotal(name) {
@@ -261,17 +264,17 @@
 
   async function increment(index, name) {
     if (!editEnabled) return;
-    data[index][capitalizeName(name)]+=5;
+    data[index][capitalizeName(name)]++;
     renderTable();
-    await saveData();
+    //await saveData();
   }
 
   async function decrement(index, name) {
     if (!editEnabled) return;
     if (data[index][capitalizeName(name)] > 0) {
-      data[index][capitalizeName(name)]-=5;
+      data[index][capitalizeName(name)]--;
       renderTable();
-      await saveData();
+      //await saveData();
     }
   }
 
@@ -374,6 +377,50 @@
       ctx.fillText(totals[name], x + barWidth / 2, height - barHeight - 40);
     });
   }
+  
+function renderChart() {
+  const totals = { Abel: 0, Aron: 0, Lia: 0 };
+
+  data.forEach(row => {
+    const timeStr = String(row.Time).trim().toLowerCase();;
+    const timeMatch = timeStr.match(/(\d+)/);
+    const timeValue = timeMatch ? parseInt(timeMatch[1]) : 0;
+
+    totals.Abel += (row.Abel || 0) * timeValue;
+    totals.Aron += (row.Aron || 0) * timeValue;
+    totals.Lia += (row.Lia || 0) * timeValue;
+  });
+
+  const canvas = document.getElementById('scoreChart');
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const height = canvas.height;
+  ctx.clearRect(0, 0, width, height);
+  if (window.scoreChrt) {
+    window.scoreChrt.destroy();  // <-- itt töröljük az előző chartot
+  }
+  window.scoreChrt = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Abel', 'Aron', 'Lia'],
+      datasets: [{
+        label: 'Összpont (érték × perc)',
+        data: [totals.Abel, totals.Aron, totals.Lia],
+        backgroundColor: ['#42a5f5', '#66bb6a', '#ffca28']
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          beginAtZero: true,
+          title: { display: true, text: 'Pontszám' }
+        }
+      }
+    }
+  });
+}
+
   function showMessage(message, type = 'info') {
     const box = document.getElementById('infoBox');
     box.textContent = message;
