@@ -4,8 +4,12 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <meta charset="UTF-8" />
   <title>Játékidő</title>
-  <div id="infoBox"></div>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -30,6 +34,7 @@
     th {
       background: #3498db;
       color: white;
+      justify-content: space-between;
     }
     input[type="text"], input[type="password"] {
       padding: 8px;
@@ -77,6 +82,13 @@
       padding: 10px;
     }
   }
+  #catHeader{
+    padding: 10px;
+  }
+  #exportBtn{
+    background: #3498db;
+    text-align: right;
+  }
   #infoBox {
     display: none;
     background-color: #e1f5fe;
@@ -107,33 +119,56 @@
     font-size:18px; 
     box-shadow:0 0 10px rgba(0,0,0,0.3);
   }
+  #passwordModal{
+    display:none; 
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.5);
+    z-index:2000;
+    align-items:center;
+    justify-content:center;
+  }
+  #passwordModalText{
+    background:#fff;
+    padding:20px;
+    border-radius:8px;
+    max-width:300px;
+    width:90%;
+    box-shadow:0 0 10px rgba(0,0,0,0.25);
+    text-align:center;
+  }
+  #passwordModalInput{
+    width:95%;
+    padding:8px;
+    margin:10px 0;
+    font-size:16px;
+  }
+  #passwordError{
+    color:red;
+    display:none;
+    margin-bottom:10px;
+  }
   </style>
 </head>
 <body>
-
-  <h1>Toth Boys Game time score</h1>
-
+  <div id="infoBox"></div>
+  <h1>🙂 Játék idő pontozás - Tóth lurkók 🙂</h1>
   <div>
-    <input type="password" id="editPassword" placeholder="Írd be a jelszót a szerkesztéshez" />
-    <button onclick="unlockEdit()">Szerkesztés engedélyezése</button>
+    <button onclick="openPasswordModal()">Szerkesztés engedélyezése</button>
   </div>
-
-  <div>
-    <input type="text" id="newCategoryInput" placeholder="Új kategória pl: Kukamosás+15 perc" />
-    <button onclick="addCategory()">Hozzáadás</button>
-    <button onclick="exportToCSV()">Exportálás Excelbe</button>
+  <div id="editControls" style="display:none; margin:10px 0;">
+    <input type="text" id="newCategoryInput" placeholder="Pl.: Mosogatás+15 perc">
+    <button onclick="addCategory()">Kategória hozzáadása</button>
+    <div><button onclick="resetScores()">Pontok nullázása</button></div>
   </div>
-
-  <div>
-    <input type="password" id="resetPassword" placeholder="Pontok törlése jelszóval" />
-    <button onclick="resetScores()">Pontok törlése</button>
-  </div>
-
   <div class="scroll-container">
     <table id="scoreTable">
       <thead>
         <tr>
-          <th>Category</th>
+          <th><div class="col-sm-3"><button id="exportBtn" onclick="exportToCSV()" title="Exportálás Excelbe">📥</button></div><div id="catHeader" class="col-sm-3"> Category </div></th>
           <th>Time</th>
           <th>Abel</th>
           <th>Aron</th>
@@ -143,307 +178,343 @@
       <tbody id="tableBody"></tbody>
     </table>
   </div>
-
   <canvas id="scoreChart" width="400" height="200"></canvas>
-
   <div id="savingModal">
-    <div id="savingModalMessage">
-      
+    <div id="savingModalMessage">   
     </div>
   </div>
-<script>
-  const backendUrl = "https://script.google.com/macros/s/AKfycbwYZvZLPYZ_IY0e4XoKq0kTc4botO5hUo4R-a191Qft_9QFYbm0ORDwveB4xckx0s22/exec";
-  const editPass = 'admin123';
-  let editEnabled = false;
-  let data = [];
-  const tableBody = document.getElementById('tableBody');
+  <!-- Jelszó bekérő modal -->
+  <div id="passwordModal">
+    <div id="passwordModalText">
+      <h2>Jelszó megadása</h2>
+      <form id="passwordForm" onsubmit="checkPassword(event)">
+        <input type="password" id="passwordModalInput" placeholder="Írd be a jelszót">
+        <div id="passwordError"></div>
+        <button type="submit">Ellenőrzés</button>
+        <button onclick="closePasswordModal()" style="margin-left:10px;background:#ccc;">Mégse</button>
+      </form>
+    </div>
+  </div>
+  <script>
+    const backendUrl = "https://script.google.com/macros/s/AKfycbwYZvZLPYZ_IY0e4XoKq0kTc4botO5hUo4R-a191Qft_9QFYbm0ORDwveB4xckx0s22/exec";
+    const editPass = 'admin123';
+    let editEnabled = false;
+    let data = [];
+    const tableBody = document.getElementById('tableBody');
 
-  async function loadData() {
-    try {
-      showSavingModal("📥 Adatok betöltése folyamatban, kérlek várj...");
-      const response = await fetch(backendUrl);
-      const json = await response.json();
-      data = json.map(row => ({
-        Category: row.Category || '',
-        Time: row.Time || '',
-        Abel: Number(row.Abel) || 0,
-        Aron: Number(row.Aron) || 0,
-        Lia: Number(row.Lia) || 0
-      }));
-      renderTable();
-    } catch (e) {
-      showMessage("Hiba az adatok betöltésekor: " + e.message,"error");
+    function openPasswordModal() {
+        document.getElementById('passwordModal').style.display = 'flex';
+        document.getElementById('passwordModalInput').value = '';
+        document.getElementById('passwordError').style.display = 'none';
+        document.getElementById('passwordModalInput').focus();
     }
-    finally{
-      hideSavingModal()
-    }
-  }
 
-  async function saveData() {
-    try {
-      showSavingModal("💾 Mentés folyamatban, kérlek várj...");
-      const response = await fetch(backendUrl, {
-        method: 'POST',
-        body: JSON.stringify(data),
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    function closePasswordModal() {
+      document.getElementById('passwordModal').style.display = 'none';
+    }
+
+    function checkPassword() {
+      event.preventDefault(); 
+      const pw = document.getElementById('passwordModalInput').value;
+      if (pw === editPass) {
+        editEnabled = true;
+        closePasswordModal();
+        document.getElementById('editControls').style.display = 'block';
+        showMessage('Szerkesztés engedélyezve', 'success');
+        renderTable();
+      } else {
+        const err = document.getElementById('passwordError');
+        err.textContent = 'Hibás jelszó!';
+        err.style.display = 'block';
+      }
+    }
+
+    async function loadData() {
+      try {
+        showSavingModal("📥 Adatok betöltése folyamatban, kérlek várj...");
+        const response = await fetch(backendUrl);
+        const json = await response.json();
+        data = json.map(row => ({
+          Category: row.Category || '',
+          Time: row.Time || '',
+          Abel: Number(row.Abel) || 0,
+          Aron: Number(row.Aron) || 0,
+          Lia: Number(row.Lia) || 0
+        }));
+        renderTable();
+      } catch (e) {
+        showMessage("Hiba az adatok betöltésekor: " + e.message,"error");
+      }
+      finally{
+        hideSavingModal()
+      }
+    }
+
+    async function saveData() {
+      try {
+        showSavingModal("💾 Mentés folyamatban, kérlek várj...");
+        const response = await fetch(backendUrl, {
+          method: 'POST',
+          body: JSON.stringify(data),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+        const text = await response.text();
+        hideSavingModal();
+        showMessage(text.includes('sikeres') ? 'Mentés sikeres' : text, 'success');
+      } catch (e) {
+        hideSavingModal();
+        showMessage("Hiba a mentéskor: " + e.message,"error");
+      }
+    }
+
+    function showSavingModal(text) {
+      document.getElementById('savingModal').style.display = 'flex';
+      document.getElementById('savingModalMessage').textContent = text;
+    }
+
+    function hideSavingModal() {
+      document.getElementById('savingModal').style.display = 'none';
+    }
+    
+    function renderTable() {
+      tableBody.innerHTML = '';
+
+      let total = { abel: 0, aron: 0, lia: 0 };
+      data.forEach(row => {
+        total.abel += row.Abel;
+        total.aron += row.Aron;
+        total.lia += row.Lia;
       });
-      const text = await response.text();
-      hideSavingModal();
-      showMessage(text.includes('sikeres') ? 'Mentés sikeres' : text, 'success');
-    } catch (e) {
-      hideSavingModal();
-      showMessage("Hiba a mentéskor: " + e.message,"error");
+
+      const maxPoints = Math.max(total.abel, total.aron, total.lia);
+
+      data.forEach((row, index) => {
+        const tr = document.createElement('tr');
+
+        const createCell = (value, name) => {
+          const cell = document.createElement('td');
+          if (getTotal(name) === maxPoints && maxPoints > 0) {
+            cell.classList.add('highlight');
+          }
+          let controls = '';
+          if (editEnabled) {
+            controls = `
+              <button onclick="increment(${index}, '${name}')">➕</button>
+              <button onclick="decrement(${index}, '${name}')">➖</button>
+              <button onclick="saveData()">💾</button>
+            `;
+          }
+          cell.innerHTML = `${value} ${controls}`;
+          return cell;
+        };
+
+        const tdCat = document.createElement('td');
+        tdCat.textContent = row.Category;
+        tr.appendChild(tdCat);
+
+        const tdTime = document.createElement('td');
+        tdTime.textContent = row.Time;
+        tr.appendChild(tdTime);
+
+        tr.appendChild(createCell(row.Abel, 'abel'));
+        tr.appendChild(createCell(row.Aron, 'aron'));
+        tr.appendChild(createCell(row.Lia, 'lia'));
+
+        tableBody.appendChild(tr);
+      });
+
+      //drawChart();
+      renderChart();
     }
-  }
-  function showSavingModal(text) {
-    document.getElementById('savingModal').style.display = 'flex';
-    document.getElementById('savingModalMessage').textContent = text;
-  }
 
-  function hideSavingModal() {
-    document.getElementById('savingModal').style.display = 'none';
-  }
-  function renderTable() {
-    tableBody.innerHTML = '';
+    function getTotal(name) {
+      return data.reduce((sum, row) => sum + Number(row[capitalizeName(name)]), 0);
+    }
 
-    let total = { abel: 0, aron: 0, lia: 0 };
-    data.forEach(row => {
-      total.abel += row.Abel;
-      total.aron += row.Aron;
-      total.lia += row.Lia;
-    });
+    function capitalizeName(name) {
+      return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+    }
 
-    const maxPoints = Math.max(total.abel, total.aron, total.lia);
-
-    data.forEach((row, index) => {
-      const tr = document.createElement('tr');
-
-      const createCell = (value, name) => {
-        const cell = document.createElement('td');
-        if (getTotal(name) === maxPoints && maxPoints > 0) {
-          cell.classList.add('highlight');
-        }
-        let controls = '';
-        if (editEnabled) {
-          controls = `
-            <button onclick="increment(${index}, '${name}')">➕</button>
-            <button onclick="decrement(${index}, '${name}')">➖</button>
-            <button onclick="saveData()">💾</button>
-          `;
-        }
-        cell.innerHTML = `${value} ${controls}`;
-        return cell;
-      };
-
-      const tdCat = document.createElement('td');
-      tdCat.textContent = row.Category;
-      tr.appendChild(tdCat);
-
-      const tdTime = document.createElement('td');
-      tdTime.textContent = row.Time;
-      tr.appendChild(tdTime);
-
-      tr.appendChild(createCell(row.Abel, 'abel'));
-      tr.appendChild(createCell(row.Aron, 'aron'));
-      tr.appendChild(createCell(row.Lia, 'lia'));
-
-      tableBody.appendChild(tr);
-    });
-
-    //drawChart();
-    renderChart();
-  }
-
-  function getTotal(name) {
-    return data.reduce((sum, row) => sum + Number(row[capitalizeName(name)]), 0);
-  }
-
-  function capitalizeName(name) {
-    return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-  }
-
-  async function increment(index, name) {
-    if (!editEnabled) return;
-    data[index][capitalizeName(name)]++;
-    renderTable();
-    //await saveData();
-  }
-
-  async function decrement(index, name) {
-    if (!editEnabled) return;
-    if (data[index][capitalizeName(name)] > 0) {
-      data[index][capitalizeName(name)]--;
+    async function increment(index, name) {
+      if (!editEnabled) return;
+      data[index][capitalizeName(name)]++;
       renderTable();
       //await saveData();
     }
-  }
 
-  async function addCategory() {
-    if (!editEnabled) {
-      showMessage('Először add meg a helyes jelszót!',"warn");
-      return;
-    }
-    const input = document.getElementById('newCategoryInput');
-    const val = input.value.trim();
-    if (!val.includes('+')) {
-      showMessage('Hibás formátum! Pl.: Mosogatás+15 perc',"warn");
-      input.value = '';
-      return;
-    }
-    const [cat, time] = val.split('+');
-    if (!cat || !time) {
-      showMessage('Mindkét mező szükséges!',"warn");
-      input.value = '';
-      return;
-    }
-    data.push({
-      Category: cat.trim(),
-      Time: time.trim(),
-      Abel: 0,
-      Aron: 0,
-      Lia: 0
-    });
-    input.value = '';
-    renderTable();
-    await saveData();
-  }
-
-  async function resetScores() {
-    const pass = document.getElementById('resetPassword').value;
-    if (pass !== editPass) {
-      showMessage('Hibás jelszó!',"error");
-      return;
-    }
-    if (!confirm('Biztosan törlöd az összes pontot?')) return;
-    data.forEach(row => {
-      row.Abel = 0;
-      row.Aron = 0;
-      row.Lia = 0;
-    });
-    document.getElementById('resetPassword').value = '';
-    renderTable();
-    await saveData();
-  }
-
-  function unlockEdit() {
-    const pw = document.getElementById('editPassword').value;
-    if (pw === editPass) {
-      editEnabled = true;
-      showMessage('Szerkesztés engedélyezve.');
-      renderTable();
-    } else {
-      showMessage('Hibás jelszó.',"error");
-    }
-  }
-
-  function exportToCSV() {
-    let csv = 'Category,Time,Abel,Aron,Lia\n';
-    data.forEach(row => {
-      csv += `${row.Category},${row.Time},${row.Abel},${row.Aron},${row.Lia}\n`;
-    });
-    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'toth_boys_score.csv';
-    link.click();
-  }
-
-  function drawChart() {
-    const canvas = document.getElementById('scoreChart');
-    const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
-    ctx.clearRect(0, 0, width, height);
-
-    const totals = {
-      Abel: getTotal('abel'),
-      Aron: getTotal('aron'),
-      Lia: getTotal('lia'),
-    };
-
-    const names = Object.keys(totals);
-    const max = Math.max(...Object.values(totals), 1);
-    const barWidth = 80;
-    const gap = 40;
-
-    names.forEach((name, i) => {
-      const x = 50 + i * (barWidth + gap);
-      const barHeight = (totals[name] / max) * (height - 50);
-      ctx.fillStyle = '#3498db';
-      ctx.fillRect(x, height - barHeight - 30, barWidth, barHeight);
-      ctx.fillStyle = '#000';
-      ctx.textAlign = 'center';
-      ctx.fillText(name, x + barWidth / 2, height - 10);
-      ctx.fillText(totals[name], x + barWidth / 2, height - barHeight - 40);
-    });
-  }
-  
-function renderChart() {
-  const totals = { Abel: 0, Aron: 0, Lia: 0 };
-
-  data.forEach(row => {
-    const timeStr = String(row.Time).trim().toLowerCase();;
-    const timeMatch = timeStr.match(/(\d+)/);
-    const timeValue = timeMatch ? parseInt(timeMatch[1]) : 0;
-
-    totals.Abel += (row.Abel || 0) * timeValue;
-    totals.Aron += (row.Aron || 0) * timeValue;
-    totals.Lia += (row.Lia || 0) * timeValue;
-  });
-
-  const canvas = document.getElementById('scoreChart');
-  const ctx = canvas.getContext('2d');
-  const width = canvas.width;
-  const height = canvas.height;
-  ctx.clearRect(0, 0, width, height);
-  if (window.scoreChrt) {
-    window.scoreChrt.destroy();  // <-- itt töröljük az előző chartot
-  }
-  window.scoreChrt = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: ['Abel', 'Aron', 'Lia'],
-      datasets: [{
-        label: 'Összpont (érték × perc)',
-        data: [totals.Abel, totals.Aron, totals.Lia],
-        backgroundColor: ['#42a5f5', '#66bb6a', '#ffca28']
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        y: {
-          beginAtZero: true,
-          title: { display: true, text: 'Pontszám' }
-        }
+    async function decrement(index, name) {
+      if (!editEnabled) return;
+      if (data[index][capitalizeName(name)] > 0) {
+        data[index][capitalizeName(name)]--;
+        renderTable();
+        //await saveData();
       }
     }
-  });
-}
 
-  function showMessage(message, type = 'info') {
-    const box = document.getElementById('infoBox');
-    box.textContent = message;
+    async function addCategory() {
+      if (!editEnabled) {
+        showMessage('Először add meg a helyes jelszót!',"warn");
+        return;
+      }
+      const input = document.getElementById('newCategoryInput');
+      const val = input.value.trim();
+      if (!val.includes('+')) {
+        showMessage('Hibás formátum! Pl.: Mosogatás+15 perc',"warn");
+        input.value = '';
+        return;
+      }
+      const [cat, time] = val.split('+');
+      if (!cat || !time) {
+        showMessage('Mindkét mező szükséges!',"warn");
+        input.value = '';
+        return;
+      }
+      data.push({
+        Category: cat.trim(),
+        Time: time.trim(),
+        Abel: 0,
+        Aron: 0,
+        Lia: 0
+      });
+      input.value = '';
+      renderTable();
+      await saveData();
+    }
 
-    const styles = {
-      warn: ['#e1f5fe', '#0277bd', '#81d4fa'],
-      info: ['#d0f8ce', '#2e7d32', '#a5d6a7'],
-      error: ['#ffebee', '#c62828', '#ef9a9a']
-    };
+    async function resetScores() {
+      if (!editEnabled) {
+        showMessage('Először add meg a helyes jelszót!',"warn");
+        return;
+      }
+      if (!confirm('Biztosan törlöd az összes pontot?')) return;
+      data.forEach(row => {
+        row.Abel = 0;
+        row.Aron = 0;
+        row.Lia = 0;
+      });
+      renderTable();
+      await saveData();
+    }
 
-    const [bg, color, border] = styles[type] || styles.info;
-    box.style.backgroundColor = bg;
-    box.style.color = color;
-    box.style.border = `1px solid ${border}`;
-    box.style.display = 'block';
+    function unlockEdit() {
+      const pw = document.getElementById('editPassword').value;
+      if (pw === editPass) {
+        editEnabled = true;
+        showMessage('Szerkesztés engedélyezve.');
+        renderTable();
+      } else {
+        showMessage('Hibás jelszó.',"error");
+      }
+    }
 
-    setTimeout(() => {
-      box.style.display = 'none';
-    }, 3000);
-  }
+    function exportToCSV() {
+      let csv = 'Category,Time,Abel,Aron,Lia\n';
+      data.forEach(row => {
+        csv += `${row.Category},${row.Time},${row.Abel},${row.Aron},${row.Lia}\n`;
+      });
+      const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'toth_boys_score.csv';
+      link.click();
+    }
 
-  window.onload = loadData;
-</script>
+    function drawChart() {
+      const canvas = document.getElementById('scoreChart');
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
+      ctx.clearRect(0, 0, width, height);
+
+      const totals = {
+        Abel: getTotal('abel'),
+        Aron: getTotal('aron'),
+        Lia: getTotal('lia'),
+      };
+
+      const names = Object.keys(totals);
+      const max = Math.max(...Object.values(totals), 1);
+      const barWidth = 80;
+      const gap = 40;
+
+      names.forEach((name, i) => {
+        const x = 50 + i * (barWidth + gap);
+        const barHeight = (totals[name] / max) * (height - 50);
+        ctx.fillStyle = '#3498db';
+        ctx.fillRect(x, height - barHeight - 30, barWidth, barHeight);
+        ctx.fillStyle = '#000';
+        ctx.textAlign = 'center';
+        ctx.fillText(name, x + barWidth / 2, height - 10);
+        ctx.fillText(totals[name], x + barWidth / 2, height - barHeight - 40);
+      });
+    }
+    
+    function renderChart() {
+      const totals = { Abel: 0, Aron: 0, Lia: 0 };
+
+      data.forEach(row => {
+        const timeStr = String(row.Time).trim().toLowerCase();;
+        const timeMatch = timeStr.match(/(\d+)/);
+        const timeValue = timeMatch ? parseInt(timeMatch[1]) : 0;
+
+        totals.Abel += (row.Abel || 0) * timeValue;
+        totals.Aron += (row.Aron || 0) * timeValue;
+        totals.Lia += (row.Lia || 0) * timeValue;
+      });
+
+      const canvas = document.getElementById('scoreChart');
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
+      ctx.clearRect(0, 0, width, height);
+      if (window.scoreChrt) {
+        window.scoreChrt.destroy();  // <-- itt töröljük az előző chartot
+      }
+      window.scoreChrt = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Abel', 'Aron', 'Lia'],
+          datasets: [{
+            label: 'Összpont (érték × perc)',
+            data: [totals.Abel, totals.Aron, totals.Lia],
+            backgroundColor: ['#42a5f5', '#66bb6a', '#ffca28']
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Pontszám' }
+            }
+          }
+        }
+      });
+    }
+
+    function showMessage(message, type = 'info') {
+      const box = document.getElementById('infoBox');
+      box.textContent = message;
+
+      const styles = {
+        warn: ['#e1f5fe', '#0277bd', '#81d4fa'],
+        info: ['#d0f8ce', '#2e7d32', '#a5d6a7'],
+        error: ['#ffebee', '#c62828', '#ef9a9a']
+      };
+
+      const [bg, color, border] = styles[type] || styles.info;
+      box.style.backgroundColor = bg;
+      box.style.color = color;
+      box.style.border = `1px solid ${border}`;
+      box.style.display = 'block';
+
+      setTimeout(() => {
+        box.style.display = 'none';
+      }, 3000);
+    }
+
+    window.onload = loadData;
+  </script>
 
 </body>
 </html>
