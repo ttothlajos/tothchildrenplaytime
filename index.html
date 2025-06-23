@@ -2,7 +2,8 @@
 <html lang="hu">
 <head>
   <meta charset="UTF-8" />
-  <title>Toth Boys Game time score</title>
+  <title>Játékidő</title>
+  <div id="infoBox"></div>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {
@@ -56,25 +57,55 @@
       max-width: 100%;
     }
     @media (max-width: 600px) {
-      table, thead, tbody, th, td, tr {
-        font-size: 14px;
-        padding: 6px;
-      }
-    
-      button {
-        padding: 4px 6px;
-        font-size: 12px;
-      }
-    
-      input[type="text"], input[type="password"] {
-        width: 100%;
-        max-width: 100%;
-      }
-    
-      body {
-        padding: 10px;
-      }
+    table, thead, tbody, th, td, tr {
+      font-size: 14px;
+      padding: 6px;
     }
+
+    button {
+      padding: 4px 6px;
+      font-size: 12px;
+    }
+
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    body {
+      padding: 10px;
+    }
+  }
+  #infoBox {
+    display: none;
+    background-color: #e1f5fe;
+    color: #0277bd;
+    font-weight: bold;
+    border: 1px solid #81d4fa;
+    padding: 10px;
+    border-radius: 5px;
+    transition: all 0.3s ease;
+  } 
+  #savingModal {
+    display:none; 
+    position:fixed; 
+    top:0; 
+    left:0; 
+    width:100%; 
+    height:100%;
+    background:rgba(0,0,0,0.5); 
+    z-index:1000; 
+    display:flex; 
+    align-items:center; 
+    justify-content:center;
+  }
+  #savingModalMessage {
+    background:white; 
+    padding:20px 30px; 
+    border-radius:10px; 
+    font-size:18px; 
+    box-shadow:0 0 10px rgba(0,0,0,0.3);
+  }
   </style>
 </head>
 <body>
@@ -114,16 +145,21 @@
 
   <canvas id="scoreChart" width="400" height="200"></canvas>
 
+  <div id="savingModal">
+    <div id="savingModalMessage">
+      
+    </div>
+  </div>
 <script>
   const backendUrl = "https://script.google.com/macros/s/AKfycbwYZvZLPYZ_IY0e4XoKq0kTc4botO5hUo4R-a191Qft_9QFYbm0ORDwveB4xckx0s22/exec";
   const editPass = 'admin123';
   let editEnabled = false;
   let data = [];
-
   const tableBody = document.getElementById('tableBody');
 
   async function loadData() {
     try {
+      showSavingModal("📥 Adatok betöltése folyamatban, kérlek várj...");
       const response = await fetch(backendUrl);
       const json = await response.json();
       data = json.map(row => ({
@@ -135,22 +171,37 @@
       }));
       renderTable();
     } catch (e) {
-      alert("Hiba az adatok betöltésekor: " + e.message);
+      showMessage("Hiba az adatok betöltésekor: " + e.message,"error");
+    }
+    finally{
+      hideSavingModal()
     }
   }
 
   async function saveData() {
     try {
-      await fetch(backendUrl, {
+      showSavingModal("💾 Mentés folyamatban, kérlek várj...");
+      const response = await fetch(backendUrl, {
         method: 'POST',
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
+      const text = await response.text();
+      hideSavingModal();
+      showMessage(text.includes('sikeres') ? 'Mentés sikeres' : text, 'success');
     } catch (e) {
-      alert("Hiba a mentéskor: " + e.message);
+      hideSavingModal();
+      showMessage("Hiba a mentéskor: " + e.message,"error");
     }
   }
+  function showSavingModal(text) {
+    document.getElementById('savingModal').style.display = 'flex';
+    document.getElementById('savingModalMessage').textContent = text;
+  }
 
+  function hideSavingModal() {
+    document.getElementById('savingModal').style.display = 'none';
+  }
   function renderTable() {
     tableBody.innerHTML = '';
 
@@ -226,18 +277,20 @@
 
   async function addCategory() {
     if (!editEnabled) {
-      alert('Először add meg a helyes jelszót!');
+      showMessage('Először add meg a helyes jelszót!',"warn");
       return;
     }
     const input = document.getElementById('newCategoryInput');
     const val = input.value.trim();
     if (!val.includes('+')) {
-      alert('Hibás formátum! Pl.: Mosogatás+15 perc');
+      showMessage('Hibás formátum! Pl.: Mosogatás+15 perc',"warn");
+      input.value = '';
       return;
     }
     const [cat, time] = val.split('+');
     if (!cat || !time) {
-      alert('Mindkét mező szükséges!');
+      showMessage('Mindkét mező szükséges!',"warn");
+      input.value = '';
       return;
     }
     data.push({
@@ -255,7 +308,7 @@
   async function resetScores() {
     const pass = document.getElementById('resetPassword').value;
     if (pass !== editPass) {
-      alert('Hibás jelszó!');
+      showMessage('Hibás jelszó!',"error");
       return;
     }
     if (!confirm('Biztosan törlöd az összes pontot?')) return;
@@ -273,10 +326,10 @@
     const pw = document.getElementById('editPassword').value;
     if (pw === editPass) {
       editEnabled = true;
-      alert('Szerkesztés engedélyezve.');
+      showMessage('Szerkesztés engedélyezve.');
       renderTable();
     } else {
-      alert('Hibás jelszó.');
+      showMessage('Hibás jelszó.',"error");
     }
   }
 
@@ -320,6 +373,26 @@
       ctx.fillText(name, x + barWidth / 2, height - 10);
       ctx.fillText(totals[name], x + barWidth / 2, height - barHeight - 40);
     });
+  }
+  function showMessage(message, type = 'info') {
+    const box = document.getElementById('infoBox');
+    box.textContent = message;
+
+    const styles = {
+      warn: ['#e1f5fe', '#0277bd', '#81d4fa'],
+      info: ['#d0f8ce', '#2e7d32', '#a5d6a7'],
+      error: ['#ffebee', '#c62828', '#ef9a9a']
+    };
+
+    const [bg, color, border] = styles[type] || styles.info;
+    box.style.backgroundColor = bg;
+    box.style.color = color;
+    box.style.border = `1px solid ${border}`;
+    box.style.display = 'block';
+
+    setTimeout(() => {
+      box.style.display = 'none';
+    }, 3000);
   }
 
   window.onload = loadData;
