@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -175,7 +176,7 @@
           <th>Lia</th>
         </tr>
       </thead>
-      <tbody id="tableBody"></tbody>
+      <tbody id="sortableBody"></tbody>
     </table>
   </div>
   <canvas id="scoreChart" width="400" height="200"></canvas>
@@ -200,7 +201,7 @@
     const editPass = 'admin123';
     let editEnabled = false;
     let data = [];
-    const tableBody = document.getElementById('tableBody');
+    const tableBody = document.getElementById('sortableBody');
 
     function openPasswordModal() {
         document.getElementById('passwordModal').style.display = 'flex';
@@ -290,7 +291,7 @@
 
       data.forEach((row, index) => {
         const tr = document.createElement('tr');
-
+        tr.setAttribute('data-index', index);
         const createCell = (value, name) => {
           const cell = document.createElement('td');
           if (getTotal(name) === maxPoints && maxPoints > 0) {
@@ -326,6 +327,20 @@
       //drawChart();
       renderChart();
     }
+
+    Sortable.create(document.getElementById('sortableBody'), {
+      animation: 150,
+      onEnd: function (evt) {
+        const newData = [];
+        const rows = evt.to.querySelectorAll('tr');
+        rows.forEach(row => {
+          const index = row.getAttribute('data-index');
+          newData.push(data[Number(index)]);
+        });
+        data = newData;
+        renderTable();
+      }
+    });
 
     function getTotal(name) {
       return data.reduce((sum, row) => sum + Number(row[capitalizeName(name)]), 0);
