@@ -328,7 +328,7 @@
       renderChart();
     }
 
-    Sortable.create(document.getElementById('sortableBodyDISABLED'), {
+    /*Sortable.create(document.getElementById('sortableBodyDISABLED'), {
       animation: 150,
       onEnd: function (evt) {
         const newData = [];
@@ -340,7 +340,7 @@
         data = newData;
         renderTable();
       }
-    });
+    });*/
 
     function getTotal(name) {
       return data.reduce((sum, row) => sum + Number(row[capitalizeName(name)]), 0);
